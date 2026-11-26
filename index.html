@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Patriarchal College — Schedule Management System</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden !important; overscroll-behavior: none; }
+    ::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
+    * { scrollbar-width: none !important; -ms-overflow-style: none !important; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+
+    .view { display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; }
+    .view.is-hidden { display: none !important; }
+    .fade-in { animation: fadeIn .28s ease both; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .card-hover { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+    .card-hover:hover { transform: translateY(-2px); }
+
+    /* جدول الحصص */
+    table.sched {
+        table-layout: fixed;
+        border-collapse: collapse;
+        width: 100%;
+        height: 100%;
+    }
+    table.sched th,
+    table.sched td {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        line-height: 1.15;
+        padding: 2px 1px;
+    }
+    table.sched thead th { padding: 4px 1px; }
+
+    /* بطاقات المدرسين */
+    .teacher-name {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        word-break: break-word;
+        line-height: 1.1;
+        font-size: 10px;
+    }
+
+    select:focus, button:focus { outline: 2px solid #d4af37; outline-offset: 1px; }
+
+    /* ============ Mobile-First Adjustments ============ */
+    body.mode-mobile #app-container { border-radius: 12px; }
+
+    body.mode-mobile .btn-touch {
+        padding: 10px 14px !important;
+        font-size: 13px !important;
+        border-radius: 10px !important;
+    }
+
+    body.mode-mobile select,
+    body.mode-mobile input {
+        padding: 8px 6px !important;
+        font-size: 12.5px !important;
+        border-radius: 8px !important;
+    }
+
+    body.mode-mobile #teachers-grid-container {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+        gap: 8px !important;
+    }
+
+    body.mode-mobile .teacher-card {
+        padding: 8px 9px !important;
+        gap: 8px !important;
+    }
+    body.mode-mobile .teacher-card .teacher-name { font-size: 11.5px; }
+    body.mode-mobile .teacher-card .teacher-meta { font-size: 10px; }
+    body.mode-mobile .teacher-card .avatar { width: 30px; height: 30px; font-size: 10px; }
+
+    body.mode-mobile #query-output {
+        font-size: 12px !important;
+        padding: 10px !important;
+    }
+    body.mode-mobile #query-output .chip {
+        font-size: 11.5px !important;
+        padding: 4px 7px !important;
+    }
+
+    /* جدول الموبايل — خطوط أكبر */
+    body.mode-mobile table.sched { font-size: 11px; }
+    body.mode-mobile table.sched th,
+    body.mode-mobile table.sched td {
+        padding: 6px 2px !important;
+    }
+
+    /* أزرار الرجوع */
+    body.mode-mobile .back-btn {
+        padding: 8px 12px !important;
+        font-size: 12px !important;
+    }
+</style>
+</head>
+
+<body class="bg-slate-200 text-slate-800">
+<div class="h-screen w-screen flex flex-col overflow-hidden">
+
+    <!-- شريط التحكم -->
+    <div class="flex-none bg-slate-900 text-white px-3 sm:px-4 py-1.5 flex items-center justify-between gap-2 shadow-lg z-20">
+        <div class="flex items-center gap-2 text-[10px] sm:text-[11px] min-w-0">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-none"></span>
+            <span class="font-medium text-slate-400 hidden sm:inline">Display:</span>
+            <span id="current-mode-text" class="text-amber-400 font-bold truncate">Laptop (1000px)</span>
+        </div>
+        <div class="flex items-center gap-1 flex-none">
+            <button data-mode="mobile" onclick="setScreenMode('mobile', true)" class="px-2.5 py-1 rounded-md text-[10px] sm:text-[11px] font-semibold transition bg-slate-700 text-slate-200 hover:bg-slate-600">Mobile</button>
+            <button data-mode="laptop" onclick="setScreenMode('laptop', true)" class="px-2.5 py-1 rounded-md text-[10px] sm:text-[11px] font-semibold transition bg-slate-700 text-slate-200 hover:bg-slate-600">Laptop</button>
+            <button data-mode="smart" onclick="setScreenMode('smart', true)" class="px-2.5 py-1 rounded-md text-[10px] sm:text-[11px] font-semibold transition bg-slate-700 text-slate-200 hover:bg-slate-600">Smart</button>
+        </div>
+    </div>
+
+    <div class="flex-1 min-h-0 w-full flex justify-center p-2 sm:p-3">
+        <div id="app-container" class="w-full max-w-[1000px] h-full bg-white rounded-2xl shadow-2xl ring-1 ring-slate-300/60 flex flex-col overflow-hidden transition-all duration-300">
+
+            <header class="flex-none bg-gradient-to-r from-[#0b1f3a] via-[#12305c] to-[#0b1f3a] text-white px-3 sm:px-5 py-2.5 sm:py-3 border-b-4 border-amber-400">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <img src="image_65c2e3.png" alt="Patriarchal College Logo"
+                         class="w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 border-amber-400 object-cover bg-white shadow-lg flex-none"
+                         onerror="this.src='https://placehold.co/80x80/1b365d/d4af37?text=PC'">
+                    <div class="min-w-0 flex-1">
+                        <h1 class="text-[15px] sm:text-lg font-extrabold tracking-wide leading-tight truncate">Patriarchal College</h1>
+                        <p class="text-[9px] sm:text-[10px] uppercase tracking-[0.18em] sm:tracking-[0.22em] text-amber-300 font-semibold mt-0.5 truncate">Teacher Schedule &amp; Management System</p>
+                    </div>
+                    <div class="hidden sm:flex flex-col items-end flex-none">
+                        <span class="text-[9px] uppercase tracking-widest text-slate-400 font-semibold">Academic Year</span>
+                        <span class="text-amber-400 font-bold text-sm">2026 / 2027</span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="flex-1 min-h-0 p-2.5 sm:p-4 flex flex-col overflow-hidden">
+
+                <!-- ============ VIEW 1 : BRANCHES ============ -->
+                <section id="view-schools" class="view fade-in">
+                    <div class="flex-none text-center mb-3 sm:mb-4">
+                        <h2 class="text-base sm:text-lg font-extrabold text-blue-950">Select School Branch</h2>
+                        <p class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5">Choose a branch to view teachers and schedule tools.</p>
+                    </div>
+                    <div class="flex-1 min-h-0 overflow-hidden">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 w-full h-full content-start sm:content-center">
+                            <button onclick="selectSchool('heliopolis')" class="group relative text-left bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm card-hover hover:border-amber-400 hover:shadow-xl overflow-hidden flex flex-col">
+                                <span class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-950 via-blue-800 to-amber-400"></span>
+                                <div class="flex items-start gap-3">
+                                    <span class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-blue-950 text-amber-400 grid place-items-center font-extrabold text-[12px] flex-none shadow">PC</span>
+                                    <div class="min-w-0">
+                                        <h3 class="font-bold text-blue-950 text-[13px] leading-snug">Patriarchal College Heliopolis <span class="text-slate-400 font-medium">(Ex-Frères)</span></h3>
+                                        <p class="text-[11px] text-slate-500 mt-1 leading-snug">Comprehensive branch management &amp; advanced queries.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                                    <span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2.5 py-1 rounded-full">13 Teachers</span>
+                                    <span class="text-blue-900 font-bold text-[11px] group-hover:translate-x-1 transition-transform">Open →</span>
+                                </div>
+                            </button>
+
+                            <button onclick="selectSchool('coeducational')" class="group relative text-left bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm card-hover hover:border-amber-400 hover:shadow-xl overflow-hidden flex flex-col">
+                                <span class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-950 via-blue-800 to-amber-400"></span>
+                                <div class="flex items-start gap-3">
+                                    <span class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-blue-950 text-amber-400 grid place-items-center font-extrabold text-[12px] flex-none shadow">PC</span>
+                                    <div class="min-w-0">
+                                        <h3 class="font-bold text-blue-950 text-[13px] leading-snug">Patriarchal College Co-educational</h3>
+                                        <p class="text-[11px] text-slate-500 mt-1 leading-snug">Co-educational division schedule portal.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                                    <span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2.5 py-1 rounded-full">5 Teachers</span>
+                                    <span class="text-blue-900 font-bold text-[11px] group-hover:translate-x-1 transition-transform">Open →</span>
+                                </div>
+                            </button>
+
+                            <button onclick="selectSchool('ramses')" class="group relative text-left bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm card-hover hover:border-amber-400 hover:shadow-xl overflow-hidden flex flex-col">
+                                <span class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-950 via-blue-800 to-amber-400"></span>
+                                <div class="flex items-start gap-3">
+                                    <span class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-blue-950 text-amber-400 grid place-items-center font-extrabold text-[12px] flex-none shadow">PC</span>
+                                    <div class="min-w-0">
+                                        <h3 class="font-bold text-blue-950 text-[13px] leading-snug">Patriarchal College Ramses</h3>
+                                        <p class="text-[11px] text-slate-500 mt-1 leading-snug">Ramses branch timetable database.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                                    <span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2.5 py-1 rounded-full">8 Teachers</span>
+                                    <span class="text-blue-900 font-bold text-[11px] group-hover:translate-x-1 transition-transform">Open →</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ============ VIEW 2 : TEACHERS ============ -->
+                <section id="view-teachers" class="view is-hidden">
+                    <div class="flex-none flex items-center justify-between gap-2 mb-2 flex-wrap">
+                        <button onclick="goHome()" class="back-btn bg-blue-950 hover:bg-blue-900 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition shadow-sm">← Back</button>
+                        <h2 id="school-heading" class="text-[11px] sm:text-[12px] font-extrabold text-blue-950 truncate flex-1 text-center">School Teachers</h2>
+                        <span id="teacher-count-badge" class="bg-blue-950 text-amber-400 text-[10px] font-bold px-2.5 py-1 rounded-full">0 Teachers</span>
+                    </div>
+
+                    <div class="flex-none bg-slate-50 border border-slate-200 rounded-xl p-2 sm:p-2.5 mb-2 shadow-sm">
+                        <h3 class="text-[9px] font-extrabold text-blue-950 uppercase tracking-[0.15em] mb-1.5">Query Tools</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                                <span class="text-[10px] font-bold text-slate-600 block mb-1">🔴 Busy / Working Teachers</span>
+                                <div class="flex gap-1.5">
+                                    <select id="query-day-busy" class="text-[11px] border border-slate-300 rounded-md p-1 bg-white flex-1 min-w-0">
+                                        <option value="Monday">Monday</option><option value="Tuesday">Tuesday</option>
+                                        <option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option>
+                                        <option value="Saturday">Saturday</option>
+                                    </select>
+                                    <select id="query-period-busy" class="text-[11px] border border-slate-300 rounded-md p-1 bg-white w-20 sm:w-24 flex-none">
+                                        <option value="1">P1</option><option value="2">P2</option>
+                                        <option value="3">P3</option><option value="4">P4</option>
+                                        <option value="5">P5</option><option value="6">P6</option>
+                                        <option value="7">P7</option><option value="8">P8</option>
+                                        <option value="9">P9</option>
+                                    </select>
+                                    <button onclick="runBusySearch()" class="bg-blue-950 hover:bg-blue-900 text-white text-[11px] font-semibold px-2.5 py-1 rounded-md transition flex-none">Search</button>
+                                </div>
+                            </div>
+                            <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                                <span class="text-[10px] font-bold text-slate-600 block mb-1">🟢 Free / Available Teachers</span>
+                                <div class="flex gap-1.5">
+                                    <select id="query-day-free" class="text-[11px] border border-slate-300 rounded-md p-1 bg-white flex-1 min-w-0">
+                                        <option value="Monday">Monday</option><option value="Tuesday">Tuesday</option>
+                                        <option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option>
+                                        <option value="Saturday">Saturday</option>
+                                    </select>
+                                    <select id="query-period-free" class="text-[11px] border border-slate-300 rounded-md p-1 bg-white w-20 sm:w-24 flex-none">
+                                        <option value="1">P1</option><option value="2">P2</option>
+                                        <option value="3">P3</option><option value="4">P4</option>
+                                        <option value="5">P5</option><option value="6">P6</option>
+                                        <option value="7">P7</option><option value="8">P8</option>
+                                        <option value="9">P9</option>
+                                    </select>
+                                    <button onclick="runFreeSearch()" class="bg-amber-400 hover:bg-amber-500 text-slate-950 text-[11px] font-bold px-2.5 py-1 rounded-md transition flex-none">Search</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="query-output" class="mt-2 text-[11px] font-medium text-slate-600 bg-white px-2.5 py-2 rounded-lg border border-slate-200 leading-snug min-h-[34px] break-words">Select a day and period to query teachers.</div>
+                    </div>
+
+                    <div id="teachers-grid-container" class="flex-1 min-h-0 overflow-hidden grid gap-1.5 content-start auto-rows-min" style="grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));"></div>
+                </section>
+
+                <!-- ============ VIEW 3 : SCHEDULE ============ -->
+                <section id="view-schedule" class="view is-hidden">
+                    <div class="flex-none flex items-center justify-between gap-2 mb-2 flex-wrap">
+                        <button onclick="backToTeachers()" class="back-btn bg-blue-950 hover:bg-blue-900 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition shadow-sm">← Back</button>
+                        <div class="flex-1 text-center min-w-0">
+                            <h2 id="schedule-heading" class="text-[11px] sm:text-[12px] font-extrabold text-blue-950 truncate">Teacher Schedule</h2>
+                            <p id="schedule-subheading" class="text-[9px] sm:text-[10px] text-slate-500 truncate"></p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-none">
+                            <span class="flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold text-slate-500">
+                                <span class="w-2.5 h-2.5 rounded-sm bg-amber-300 border border-amber-400"></span> Class
+                            </span>
+                            <span id="schedule-stats" class="bg-blue-950 text-amber-400 text-[10px] font-bold px-2 py-1 rounded-full">0 Classes</span>
+                        </div>
+                    </div>
+                    <div class="flex-1 min-h-0 bg-white border border-slate-200 rounded-xl p-2 shadow-sm">
+                        <div id="schedule-table-wrapper" class="w-full h-full overflow-hidden"></div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+</div>
+
+<script>
+const PERIODS_PER_DAY = 9;
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Saturday'];
+const DAY_SHORT = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Saturday:'Sat' };
+
+const schoolDatabase = {
+    heliopolis: {
+        name: "Patriarchal College Heliopolis (Ex-Frères)",
+        teachers: [
+            { name: "Nancy Said", schedule: {
+                Monday: { 3:"Kg1", 4:"Kg1" }, Wednesday: { 1:"Kg2", 2:"Kg2" },
+                Thursday: { 7:"Kg2", 8:"Kg2" }, Saturday: { 4:"Kg1", 5:"Kg1" } }},
+            { name: "Marina Zahi", schedule: {
+                Monday: { 3:"Kg1", 4:"Kg1" }, Wednesday: { 1:"Kg2", 2:"Kg2" },
+                Thursday: { 7:"Kg2", 8:"Kg2" }, Saturday: { 4:"Kg1", 5:"Kg1" } }},
+            { name: "Dina Samir", schedule: {
+                Monday: { 1:"G2A", 2:"G2A", 6:"G2B" },
+    Tuesday: { 1:"G2B" ,  3:"G2A" ,6:"G2B"},
+    Wednesday: { 1:"KG2", 2:"KG2", 4:"KG1", 5:"KG1", 7:"G2A", 8:"G2A" },
+    Thursday: { 3:"KG2", 7:"KG2",4:"G2B" , 5:"G2B" },
+    Saturday: { 1:"G2A", 2:"G2A", 3:"KG1" , 5:"G2B" , 6:"G2B"} }},
+            { name: "Marina Napoleon", schedule: {
+                Monday: { 2:"PRIM2", 3:"PRIM2", 5:"PRIM1" },
+                Tuesday: { 2:"PRIM2", 3:"PRIM2", 4:"PRIM1", 5:"PRIM1"},
+                Wednesday: { 1:"PRIM1", 2:"PRIM1", 4:"PRIM2", 5:"PRIM2" },
+                Thursday: { 5:"PRIM1", 4:"PRIM1" },
+                Saturday: { 3:"PRIM2", } }},
+            { name: "Sara Bassem", schedule: {
+                Monday: { 1:"G3B", 2:"G3B", 5:"G3A", 6:"G3A" },
+                Tuesday: { 1:"G3C", 2:"G3C", 4:"G3B", 5:"G3A", 6:"G3A" },
+                Wednesday: { 3:"G3C", 4:"G3C", 5:"G3B", 6:"G3B" },
+                Thursday: { 1:"G3B", 2:"G3B", 5:"G3C", 6:"G3A" },
+                Saturday: { 3:"G3A", 4:"G3A", 5:"G3C", 6:"G3C" } }},
+            { name: "Nevine Makar", schedule: {
+                Monday: { 3:"G4C", 4:"G4C", 5:"G4A", 6:"G4A" },
+    Tuesday: { 1:"G4B", 2:"G4B", 5:"G4C", 6:"G4C" },
+    Wednesday: { 3:"G4A", 4:"G4A", 6:"G4B", 7:"G4B" },
+    Thursday: { 3:"G4A", 4:"G4A", 5:"G4C", 6:"G4C" },
+    Saturday: { 5:"G4B", 6:"G4B" } }},
+            { name: "Martina Ibrahim", schedule: {
+                Monday: { 1:"G5C", 2:"G5C", 3:"G5A", 4:"G5A" },
+                Tuesday: { 1:"G5A", 2:"G5A", 4:"G5B", 5:"G5B", 6:"G5C", 7:"G5C" },
+                Wednesday: { 5:"G5B", 6:"G5B" }, Thursday: { 1:"G5C", 2:"G5C" },
+                Saturday: { 1:"G5A", 2:"G5A", 4:"G5B", 5:"G5B" } }},
+            { name: "Monica Emad", schedule: {
+                Monday: { 1:"G6A", 2:"G6A", 3:"G6C", 4:"G6C", 5:"G6B", 6:"G6B" },
+                Wednesday: { 1:"G6B", 2:"G6B", 4:"G6A", 5:"G6A", 6:"G6C", 7:"G6C" },
+                Thursday: { 1:"G6A", 2:"G6A", 3:"G6B", 4:"G6B" },
+                Saturday: { 1:"G6C", 2:"G6C" } }},
+            { name: "Mirna Karam", schedule: {
+                Wednesday: { 3:"PREP2B", 4:"PREP2B", 7:"PREP1C", 8:"PREP1C" },
+                Thursday: { 1:"PREP1C", 2:"PREP1C", 7:"PREP2B", 8:"PREP2B" },
+                Saturday: { 1:"PREP2B", 2:"PREP2B", 6:"PREP1C", 5:"PREP1C" } }},
+            { name: "Merit Ihab", schedule: {
+                Wednesday: { 1:"PREP2A", 2:"PREP2A", 3:"PREP1B", 4:"PREP1B", 5:"PREP1A", 6:"PREP1A" },
+                Thursday: { 1:"PREP1B", 2:"PREP1B", 3:"PREP1A", 4:"PREP1A", 5:"PREP2A", 6:"PREP2A" },
+                Saturday: { 1:"PREP2A", 2:"PREP2A", 5:"PREP1A", 6:"PREP1A", 7:"PREP1B", 8:"PREP1B" } }},
+            { name: "Nancy Makram", schedule: {
+                Monday: { 3:"PREP3", 4:"PREP3", 5:"PREP2", 6:"PREP2" },
+                Tuesday: { 3:"SEC2", 4:"SEC2", 5:"PREP3", 6:"PREP3", 7:"SEC1" },
+                Wednesday: { 2:"PREP3", 3:"PREP2", 6:"SEC1" },
+                Thursday: { 4:"SEC1", 7:"PREP2" }, Saturday: { 3:"PREP2", 4:"PREP2" } }},
+            { name: "Fahim Henery", schedule: {
+                Monday: { 7:"SEC1B" },
+                Tuesday: { 3:"SEC2", 4:"SEC2", 6:"SEC1B", 7:"SEC1A" },
+                Wednesday: { 2:"PREP3", 3:"PREP3", 4:"SEC1A", 5:"SEC1A" },
+                Thursday: { 1:"SEC1A", 7:"SEC1B" }, Saturday: { 1:"PREP3", 2:"PREP3", 5:"SEC1B" } }},
+            { name: "Marina Adel", schedule: {
+                Monday: { 1:"G1", 2:"G1" }, Tuesday: { 6:"G1" },
+                Wednesday: { 4:"G1", 5:"G1" }, Thursday: { 4:"G1" }, Saturday: { 1:"G1" } }}
+        ]
+    },
+
+    coeducational: {
+        name: "Patriarchal College Co-educational",
+        teachers: [
+            { name: "Sherine", schedule: {
+                Monday: { 3:"KG2A", 4:"KG2A" },
+                Tuesday: { 3:"KG2B", 4:"KG2B", 5:"KG1", 6:"KG1" },
+                Wednesday: { 4:"KG2A", 5:"KG2A", 7:"KG2B", 8:"KG2B" },
+                Thursday: { 2:"KG2B", 3:"KG2B", 7:"KG1", 8:"KG1" },
+                Saturday: { 2:"KG1", 3:"KG1", 7:"KG2A", 8:"KG2A" } }},
+            { name: "Marian Adel", schedule: {
+                Monday: { 5:"G3A", 6:"G3A", 8:"G1", 9:"G1" }, Tuesday: { 3:"G1" },
+                Wednesday: { 3:"G1", 4:"G1", 5:"G3A" }, Thursday: { 3:"G3A", 4:"G3A" },
+                Saturday: { 3:"G3A", 4:"G3A", 6:"G1", 7:"G1" } }},
+            { name: "Sally Philip", schedule: {
+                Monday: { 1:"G2", 2:"G2", 7:"G3B", 8:"G3B" }, Tuesday: { 5:"G3B", 6:"G3B" },
+                Wednesday: { 7:"G2", 8:"G2" }, Thursday: { 1:"G3B", 2:"G3B", 3:"G2" },
+                Saturday: { 6:"G2", 7:"G2", 8:"G3B" } }},
+            { name: "Marina Wagdy", schedule: {
+                Monday: { 1:"G4", 2:"G4", 6:"G5B", 7:"G5B" },
+                Tuesday: { 5:"G5A", 6:"G5A", 8:"G5B", 9:"G5B" },
+                Wednesday: { 6:"G4", 7:"G4", 8:"G5A", 9:"G5A" },
+                Thursday: { 7:"G5B", 6:"G5B" }, Saturday: {3:"G5A", 6:"G5A", 6:"G4", 7:"G4" } }},
+            { name: "Nessim Albert", schedule: {
+                Monday: {  3:"PREP2", 4:"PREP2" },
+                Tuesday: { 1:"PREP1", 2:"PREP1", 5:"G6", 4:"G6" },
+                Wednesday: { 1:"PREP1", 2:"PREP1", 5:"PREP2", 4:"PREP2" },
+                Thursday: { 5:"G6", 4:"G6" },
+                Saturday: { 1:"PREP2", 2:"PREP2", 4:"G6", 5:"G6", 6:"PREP1", 7:"PREP1" } }}
+        ]
+    },
+
+    ramses: {
+        name: "Patriarchal College Ramses",
+        teachers: [
+            { name: "Merna Sabry", schedule: {
+                Monday: { 1:"G1A", 3:"G2B", 4:"G1B", 9:"G1A" },
+                Tuesday: { 1:"G2A", 3:"G1B", 5:"G1B", 6:"G1A", 7:"G1A", 8:"G2B" , 9:"G2B"},
+                Wednesday: { 1:"G1B", 6:"G2A", 7:"G2A", 8:"G2B",9:"G2B" },
+                Thursday: { 1:"G2A", 2:"G2A", 5:"G2B", 7:"G1B", 6:"G1B", 8:"G1A"},
+                Saturday: { 1:"G2A", 2:"G2A", 3:"G1A", 4:"G1A", 5:"G2B", 6:"G1B" } }},
+            { name: "Marianne Choukry", schedule: {
+                Monday: { 3:"G3A",4:"G3A" ,  5:"G3B", 6:"G3B", 9:"G2C" },
+                Tuesday: { 6:"G3B", 5:"G3B", 8:"G2C" },
+                Wednesday: { 1:"G2C", 2:"G2C",3:"G3B" , 4:"G3B", 5:"G3A", 6:"G3A" },
+                Thursday: { 3:"G3A", 4:"G3A", 7:"G2C", 6:"G2C" },
+                Saturday: { 5:"G3B", 7:"G3A", 9:"G2C" } }},
+            { name: "Mina Nabil", schedule: {
+                Monday: { 3:"PREP1B", 4:"PREP1B", 5:"PREP3A", 6:"G5A", 7:"G5A" },
+                Tuesday: { 3:"G5A", 4:"G5A", 6:"PREP1B", 7:"PREP1B", 8:"PREP3A" },
+                Wednesday: { 6:"PREP3A", 7:"PREP3A", 8:"G5B", 9:"G5B" },
+                Thursday: { 1:"PREP3A", 4:"G5A", 3:"G5A", 6:"PREP1B", 5:"PREP1B", 8:"G5B", 7:"G5B" },
+                Saturday: { 1:"G5B", 2:"G5B", 4:"PREP3A" } }},
+            { name: "Mina Samir", schedule: {
+                Monday: { 1:"G4B", 2:"G4B", 3:"PREP3B", 5:"PREP2B", 6:"PREP3B", 7:"G4A", 8:"G4A" },
+                Tuesday: { 1:"PREP3B", 4:"G4A", 5:"G4A", 8:"PREP2B", 9:"PREP2B" },
+                Wednesday: { 1:"PREP3B", 2:"PREP3B", 3:"PREP2B", 4:"PREP2B" },
+                Thursday: { 7:"G4B", 8:"G4B", 9:"PREP2B" },
+                Saturday: { 4:"PREP3B", 6:"G4B", 7:"G4B", 8:"G4A", 9:"G4A" } }},
+            { name: "Omar Salah", schedule: {
+                Monday: { 2:"G6B", 3:"G6B", 5:"PREP1A", 6:"PREP1A", 8:"G6A", 9:"G6A" },
+                Tuesday: { 3:"PREP1A", 4:"PREP1A", 6:"PREP2A", 7:"PREP2A" },
+                Wednesday: { 3:"PREP2A", 4:"PREP2A", 6:"PREP1A", 7:"PREP1A" },
+                Thursday: { 4:"PREP2A", 3:"PREP2A", 7:"G6B", 6:"G6B", 9:"G6A", 8:"G6A" },
+                Saturday: { 5:"G6A", 4:"G6A", 7:"G6B", 6:"G6B" } }},
+            { name: "Atef", schedule: {
+                Monday: { 5:"SEC1B", 4:"SEC1B", 7:"SEC1A", 6:"SEC1A" },
+                Tuesday: { 1:"SEC1A", 3:"SEC1A", 6:"SEC2", 7:"SEC2" },
+                Wednesday: { 3:"SEC1B", 2:"SEC1B", 6:"SEC2", 7:"SEC2" } }},
+            { name: "Ninette Nader", schedule: {
+                Monday: { 4:"KG2A", 7:"KG2B" }, Tuesday: { 4:"KG2A", 5:"KG2B" },
+                Wednesday: { 4:"KG2A", 9:"KG2B" }, Thursday: { 9:"KG2A" },
+                Saturday: { 4:"KG2B" } }},
+            { name: "Christine Kamil", schedule: {
+                Monday: { 4:"KG1B", 9:"KG1A" }, Tuesday: { 4:"KG1A", 8:"KG1B" },
+                Wednesday: { 4:"KG1A", 8:"KG1B" }, Thursday: { 4:"KG1A" } }}
+        ]
+    }
+};
+
+let activeSchoolKey = null;
+let currentMode = 'laptop';
+let userSelectedMode = false;
+let currentTeacherName = null;
+
+const $ = id => document.getElementById(id);
+const getInitials = name => name.trim().split(/\s+/).slice(0,2).map(w => w[0]).join('').toUpperCase();
+const countSlots = teacher => Object.values(teacher.schedule || {}).reduce((acc, day) => acc + Object.keys(day).length, 0);
+
+/* ============================================================
+   أوضاع العرض
+   ============================================================ */
+function setScreenMode(mode, userClicked = false) {
+    if (userClicked) userSelectedMode = true;
+
+    const cfg = {
+        mobile: { w: '380px',  t: 'Mobile (380px)' },
+        laptop: { w: '1000px', t: 'Laptop (1000px)' },
+        smart:  { w: '100%',   t: 'Smart Screen (Full Width)' }
+    }[mode];
+
+    currentMode = mode;
+    $('app-container').style.maxWidth = cfg.w;
+    $('current-mode-text').textContent = cfg.t;
+
+    // Body class for mode-specific styles
+    document.body.classList.remove('mode-mobile', 'mode-laptop', 'mode-smart');
+    document.body.classList.add('mode-' + mode);
+
+    // Buttons
+    document.querySelectorAll('[data-mode]').forEach(btn => {
+        const active = btn.dataset.mode === mode;
+        btn.classList.toggle('bg-amber-400', active);
+        btn.classList.toggle('text-slate-950', active);
+        btn.classList.toggle('bg-slate-700', !active);
+        btn.classList.toggle('text-slate-200', !active);
+    });
+
+    // Re-render schedule if open (layout differs per mode)
+    if (currentTeacherName && !$('view-schedule').classList.contains('is-hidden')) {
+        openSchedule(currentTeacherName);
+    }
+}
+
+/* ============================================================
+   التنقل
+   ============================================================ */
+function showView(viewId) {
+    ['view-schools','view-teachers','view-schedule'].forEach(id => $(id).classList.toggle('is-hidden', id !== viewId));
+    const view = $(viewId);
+    view.classList.remove('fade-in');
+    void view.offsetWidth;
+    view.classList.add('fade-in');
+}
+
+function selectSchool(schoolKey) {
+    activeSchoolKey = schoolKey;
+    currentTeacherName = null;
+    const school = schoolDatabase[schoolKey];
+    $('school-heading').textContent = school.name;
+    $('teacher-count-badge').textContent = `${school.teachers.length} Teachers`;
+    $('query-output').innerHTML = 'Select a day and period to query teachers.';
+
+    const grid = $('teachers-grid-container');
+    grid.innerHTML = '';
+    school.teachers.forEach(teacher => {
+        const classes = countSlots(teacher);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.onclick = () => openSchedule(teacher.name);
+        btn.className = 'teacher-card group text-left bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm card-hover hover:border-amber-400 hover:shadow-md flex items-center gap-1.5 min-w-0';
+        btn.innerHTML = `
+            <span class="avatar w-7 h-7 rounded-md bg-blue-950 text-amber-400 grid place-items-center text-[9px] font-extrabold flex-none">${getInitials(teacher.name)}</span>
+            <span class="min-w-0 flex-1">
+                <span class="teacher-name font-bold text-blue-950">${teacher.name}</span>
+                <span class="teacher-meta block text-[9px] text-slate-500 leading-tight">${classes > 0 ? classes + ' / week' : 'No classes'}</span>
+            </span>
+            <svg class="w-3 h-3 text-slate-300 group-hover:text-amber-500 transition flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        `;
+        grid.appendChild(btn);
+    });
+    showView('view-teachers');
+}
+
+function goHome() { activeSchoolKey = null; currentTeacherName = null; showView('view-schools'); }
+function backToTeachers() { currentTeacherName = null; showView('view-teachers'); }
+
+/* ============================================================
+   جدول المدرس — Layout مختلف حسب الوضع
+   ============================================================ */
+function openSchedule(teacherName) {
+    const school = schoolDatabase[activeSchoolKey];
+    const teacher = school.teachers.find(t => t.name === teacherName);
+    currentTeacherName = teacherName;
+
+    $('schedule-heading').textContent = teacher.name;
+    $('schedule-subheading').textContent = school.name;
+    $('schedule-stats').textContent = `${countSlots(teacher)} Classes`;
+
+    const html = currentMode === 'mobile'
+        ? buildMobileTable(teacher)
+        : buildLaptopTable(teacher);
+
+    $('schedule-table-wrapper').innerHTML = html;
+
+    if ($('view-schedule').classList.contains('is-hidden')) {
+        showView('view-schedule');
+    }
+}
+
+/* جدول اللابتوب — الأيام صفوف، الحصص أعمدة */
+function buildLaptopTable(teacher) {
+    let html = `
+        <table class="sched text-[10px] sm:text-[11px]">
+            <colgroup>
+                <col style="width:75px">
+                <col span="${PERIODS_PER_DAY}">
+            </colgroup>
+            <thead>
+                <tr class="bg-blue-950 text-white">
+                    <th class="border border-blue-900 text-left font-bold text-[9px] uppercase tracking-wider">Day</th>`;
+    for (let p = 1; p <= PERIODS_PER_DAY; p++) {
+        html += `<th class="border border-blue-900 text-center font-bold text-[9px] sm:text-[10px]">P${p}</th>`;
+    }
+    html += `</tr></thead><tbody>`;
+
+    DAYS.forEach((day, i) => {
+        const rowBg = i % 2 === 0 ? 'bg-white' : 'bg-slate-50/70';
+        html += `<tr class="${rowBg}">
+                    <td class="border border-slate-200 px-1.5 font-extrabold text-blue-950 text-[10px] sm:text-[11px]">${day}</td>`;
+        for (let p = 1; p <= PERIODS_PER_DAY; p++) {
+            const slot = teacher.schedule?.[day]?.[p];
+            if (slot) {
+                html += `<td class="border border-slate-200 text-center font-bold text-amber-800 bg-amber-50 text-[9.5px] sm:text-[10.5px]" title="${slot}">${slot}</td>`;
+            } else {
+                html += `<td class="border border-slate-200 bg-white"></td>`;
+            }
+        }
+        html += `</tr>`;
+    });
+    html += `</tbody></table>`;
+    return html;
+}
+
+/* جدول الموبايل — الحصص صفوف، الأيام أعمدة */
+function buildMobileTable(teacher) {
+    let html = `
+        <table class="sched">
+            <colgroup>
+                <col style="width:52px">
+                <col span="5">
+            </colgroup>
+            <thead>
+                <tr class="bg-blue-950 text-white">
+                    <th class="border border-blue-900 text-center font-bold text-[9px]">P</th>`;
+    DAYS.forEach(d => {
+        html += `<th class="border border-blue-900 text-center font-bold text-[10px]">${DAY_SHORT[d]}</th>`;
+    });
+    html += `</tr></thead><tbody>`;
+
+    for (let p = 1; p <= PERIODS_PER_DAY; p++) {
+        const rowBg = p % 2 === 0 ? 'bg-slate-50/70' : 'bg-white';
+        html += `<tr class="${rowBg}">
+                    <td class="border border-slate-200 text-center font-extrabold text-blue-950 bg-slate-100/60 text-[10px]">${p}</td>`;
+        DAYS.forEach(day => {
+            const slot = teacher.schedule?.[day]?.[p];
+            if (slot) {
+                html += `<td class="border border-slate-200 text-center font-bold text-amber-800 bg-amber-50 text-[10px]">${slot}</td>`;
+            } else {
+                html += `<td class="border border-slate-200 bg-white"></td>`;
+            }
+        });
+        html += `</tr>`;
+    }
+    html += `</tbody></table>`;
+    return html;
+}
+
+/* ============================================================
+   البحث
+   ============================================================ */
+function runBusySearch() {
+    const day = $('query-day-busy').value;
+    const period = $('query-period-busy').value;
+    const school = schoolDatabase[activeSchoolKey];
+    const out = $('query-output');
+    const busy = school.teachers.filter(t => t.schedule?.[day]?.[period]);
+
+    if (busy.length === 0) {
+        out.innerHTML = `<span class="text-slate-500">No teachers are busy on <b>${day}</b> · Period ${period}.</span>`;
+        return;
+    }
+
+    const chips = busy.map(t =>
+        `<span class="chip inline-flex items-center gap-1 bg-red-50 text-red-800 border border-red-200 rounded-md px-1.5 py-0.5 mr-1 mb-1 text-[10px] font-semibold">
+            ${t.name}
+            <span class="bg-red-200 text-red-900 rounded px-1 text-[9px] font-bold">${t.schedule[day][period]}</span>
+        </span>`
+    ).join('');
+
+    out.innerHTML = `
+        <div class="mb-1">
+            <span class="text-red-700 font-bold">🔴 Busy on ${day} · P${period}</span>
+            <span class="text-slate-500 text-[10px]">(${busy.length})</span>
+        </div>
+        <div class="flex flex-wrap">${chips}</div>
+    `;
+}
+
+function runFreeSearch() {
+    const day = $('query-day-free').value;
+    const period = $('query-period-free').value;
+    const school = schoolDatabase[activeSchoolKey];
+    const out = $('query-output');
+    const free = school.teachers.filter(t => !t.schedule?.[day]?.[period]);
+
+    if (free.length === 0) {
+        out.innerHTML = `<span class="text-slate-500">All teachers are busy on <b>${day}</b> · Period ${period}.</span>`;
+        return;
+    }
+
+    const chips = free.map(t =>
+        `<span class="chip inline-flex items-center bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md px-1.5 py-0.5 mr-1 mb-1 text-[10px] font-semibold">
+            ${t.name}
+        </span>`
+    ).join('');
+
+    out.innerHTML = `
+        <div class="mb-1">
+            <span class="text-emerald-700 font-bold">🟢 Free on ${day} · P${period}</span>
+            <span class="text-slate-500 text-[10px]">(${free.length})</span>
+        </div>
+        <div class="flex flex-wrap">${chips}</div>
+    `;
+}
+
+/* ============================================================
+   اختصارات لوحة المفاتيح
+   ============================================================ */
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        if (!$('view-schedule').classList.contains('is-hidden')) backToTeachers();
+        else if (!$('view-teachers').classList.contains('is-hidden')) goHome();
+    }
+});
+
+/* ============================================================
+   الكشف التلقائي + إعادة الكشف عند تغيير الاتجاه
+   ============================================================ */
+function autoDetectMode() {
+    const isMobile = window.innerWidth < 640 ||
+                     ('ontouchstart' in window && window.innerWidth < 900);
+    return isMobile ? 'mobile' : 'laptop';
+}
+
+window.addEventListener('resize', () => {
+    if (userSelectedMode) return;
+    const target = autoDetectMode();
+    if (currentMode !== target) setScreenMode(target);
+});
+
+/* التهيئة */
+setScreenMode(autoDetectMode());
+</script>
+</body>
+</html>
